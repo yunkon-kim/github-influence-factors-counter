@@ -39,4 +39,21 @@ GitHub API 사용에 Rating limit이 있기 때문에 설정 하는 것이 좋�
 ```
 
 ### 4. 실행후 잠시 기다리면 `Result.csv`가 생성됩니다.
-`Result.csv`는 Repository, Stars, Forks, Watches, Commits(year)을 포함합니다.
+`Result.csv`는 Repository, Stars, Forks, Watches, Commits(year)을 포함합니다. (Excel로 열어서 작업하시면 편하실거에요.)
+
+결과 예: 
+```cvs
+Repo,Stars,Forks,Watches,Commits(2020)
+cb-spier,7,19,4,288
+cb-tumblebug,0,1,2,13
+cb-tumblebug-api-web,0,1,2,13
+cb-ladybug,0,4,4,4
+cb-dragonfly,3,8,3,133
+cb-operator,1,3,3,108
+cb-apigw,2,2,3,101
+cb-log,3,5,3,22
+cb-webtool,4,5,4,117
+cb-store,3,6,4,31
+cb-milkyway,1,1,2,32
+docs,8,8,6,60
+```
