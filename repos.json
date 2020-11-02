@@ -1,0 +1,50 @@
+[
+  {
+    "Name": "cb-spier",
+    "Path": "cloud-barista/cb-spider"
+  },
+  {
+    "Name": "cb-tumblebug",
+    "Path": "cloud-barista/cb-tumblebug-api-web"
+  },
+  {
+    "Name": "cb-tumblebug-api-web",
+    "Path": "cloud-barista/cb-tumblebug-api-web"
+  },
+  {
+    "Name": "cb-ladybug",
+    "Path": "cloud-barista/cb-ladybug"
+  },
+  {
+    "Name": "cb-dragonfly",
+    "Path": "cloud-barista/cb-dragonfly"
+  },
+  {
+    "Name": "cb-operator",
+    "Path": "cloud-barista/cb-operator"
+  },
+  {
+    "Name": "cb-apigw",
+    "Path": "cloud-barista/cb-apigw"
+  },
+  {
+    "Name": "cb-log",
+    "Path": "cloud-barista/cb-log"
+  },
+  {
+    "Name": "cb-webtool",
+    "Path": "cloud-barista/cb-webtool"
+  },
+  {
+    "Name": "cb-store",
+    "Path": "cloud-barista/cb-store"
+  },
+  {
+    "Name": "cb-milkyway",
+    "Path": "cloud-barista/cb-milkyway"
+  },
+  {
+    "Name": "docs",
+    "Path": "cloud-barista/docs"
+  }
+]
