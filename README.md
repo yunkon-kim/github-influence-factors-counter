@@ -1,6 +1,9 @@
 # GitHub influence factors counter
-<ins>**GitHub influence factors counter를 활용하면 Stars, Forks, Watches, Commits와 같은 영향요인의 수를 보다 편하게 확인할 수 있습니다.**</ins>    
-Open Source Software (OSS) 관련 프로젝트에서 편리하게 활용하시기 바랍니다. :smile:
+GitHub influence factors counter를 활용하면 Repositories, Members, Contributors, Stars, Forks, Watches, Commits와 같은 영향요인의 수를 보다 편하게 확인할 수 있습니다. :thumbsup:   
+Open Source Software (OSS) 관련 프로젝트에서 편리하게 활용하시기 바랍니다. :smile:   
+
+**OSS 연구/개발 프로젝트에서 Commit 하나 하나의 가치는 중요하지만 Commit 마다 정성적인 가치는 다릅니다.**   
+**만약 본 프로그램을 평가에 활용하신다면, <ins>정성적인 가치 평가를 꼭 함께 수행하시기를 기원합니다.</ins>**  :pray:
 
 ## Prerequities
 - python 3.8 에서 테스트하였습니다.
