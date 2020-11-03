@@ -18,7 +18,29 @@ GitHub API 사용에 Rating limit이 있기 때문에 설정 하는 것이 좋�
 }
 ```
 
-### 3. `repos.json`에 자신의 레포지토리를 기입합니다.
+### 3. `orgs.json`에 자신의 레포지토리를 기입합니다.
+"Name"을 아래와 같이 기입 합니다.
+```json
+[
+  {
+    "Name": "cloud-barista"
+  }
+]
+```
+
+### 4. 실행후 결과 생성
+실행 후 잠시 기다리면 아래 두가지 결과를 얻을 수 있습니다. (Excel로 열어서 작업하시면 편하실거에요.)
+
+결과1:
+`orgs-result.csv` 는 Organization name, Repositories, Members를 포함합니다. 
+
+결과2:
+`repos-result.csv`는 Repository, Stars, Forks, Watches, Commits(year)을 포함합니다. 
+
+
+### 비고 `repos.json`에 자신의 레포지토리를 기입하고, 특정 Repository만 조회도 가능합니다.
+기존 코드를 주석처리하고, 현재 주석 처리를 해제 해야합니다.
+
 아래 "Path" 기입시, Onwer/Repository 또는 Organization/Repository 형태로 기입합니다.   
 예) hermitkim1/github-influence-factors-counter 또는 cloud-barista/cb-spider   
 ```json
@@ -36,24 +58,4 @@ GitHub API 사용에 Rating limit이 있기 때문에 설정 하는 것이 좋�
     "Path": "xxx"
   }
 ]
-```
-
-### 4. 실행후 잠시 기다리면 `Result.csv`가 생성됩니다.
-`Result.csv`는 Repository, Stars, Forks, Watches, Commits(year)을 포함합니다. (Excel로 열어서 작업하시면 편하실거에요.)
-
-결과 예: 
-```cvs
-Repo,Stars,Forks,Watches,Commits(2020)
-cb-spier,7,19,4,288
-cb-tumblebug,0,1,2,13
-cb-tumblebug-api-web,0,1,2,13
-cb-ladybug,0,4,4,4
-cb-dragonfly,3,8,3,133
-cb-operator,1,3,3,108
-cb-apigw,2,2,3,101
-cb-log,3,5,3,22
-cb-webtool,4,5,4,117
-cb-store,3,6,4,31
-cb-milkyway,1,1,2,32
-docs,8,8,6,60
 ```
