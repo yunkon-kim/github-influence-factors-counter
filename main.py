@@ -24,7 +24,8 @@ if __name__ == '__main__':
     gh_session.auth = (username, password)
 
     # Rate limiting: https://developer.github.com/v3/#rate-limiting
-    api_root = "http://api.github.com/repos/"
+    orgs_api_root = "https://api.github.com/orgs/"
+    repos_api_root = "http://api.github.com/repos/"
 
     # Test code - GitHub API example
     #  http://api.github.com/repos/[username]/[reponame]
@@ -45,10 +46,14 @@ if __name__ == '__main__':
     # Header
     orgs_result_writer.writerow(["Organization", "Repositories", "Members"])
 
-    org_link = "https://api.github.com/orgs/cloud-barista"
+    # Read repos
+    with open('org.json') as orgs_file:
+        orgs = json.load(orgs_file)
+
+    org_link = orgs_api_root + orgs["Name"]
     org_info = json.loads(gh_session.get(org_link).text)
 
-    members_link = "https://api.github.com/orgs/cloud-barista/members"
+    members_link = orgs_api_root + orgs["Name"] + "/members"
     members_info = json.loads(gh_session.get(members_link).text)
     print("Organization name: %s" % org_info["name"])
     print("Public repos: %s" % (org_info["public_repos"]))
@@ -57,6 +62,7 @@ if __name__ == '__main__':
     orgs_result_writer.writerow([org_info["name"], org_info["public_repos"], len(members_info)])
 
     orgs_result_file.close()
+    orgs_file.close()
 
     #############################################################################
     # Results of each repository
@@ -73,7 +79,7 @@ if __name__ == '__main__':
 
     for repo in repos:
         print("\n%s(%s)" % (repo["Name"], repo["Path"]))
-        repo_link = api_root + repo["Path"]
+        repo_link = repos_api_root + repo["Path"]
 
         # Request repository statistics/information to get the number of stars, forks, watches
         repo_info = json.loads(gh_session.get(repo_link).text)
@@ -98,7 +104,7 @@ if __name__ == '__main__':
         while end_date < today:
             # print(start_date)
             # print(end_date)
-            commit_link = api_root + repo["Path"] + "/commits?since=" + start_date.strftime(
+            commit_link = repos_api_root + repo["Path"] + "/commits?since=" + start_date.strftime(
                 '%Y-%m-%d') + "&until=" + end_date.strftime('%Y-%m-%d')
 
             # with urllib.request.urlopen(commit_link) as commit_url:
@@ -109,7 +115,7 @@ if __name__ == '__main__':
             start_date = start_date + relativedelta(months=1)
             end_date = end_date + relativedelta(months=1)
 
-        commit_link2 = api_root + repo["Path"] + "/commits?since=" + start_date.strftime(
+        commit_link2 = repos_api_root + repo["Path"] + "/commits?since=" + start_date.strftime(
             '%Y-%m-%d') + "&until=" + today.strftime('%Y-%m-%d')
         # with urllib.request.urlopen(commit_link2) as commit_url2:
         #     commits2 = json.loads(commit_url2.read().decode())
