@@ -1,4 +1,7 @@
 # GitHub influence factors counter
+
+> 현재, **Organization의 영향요인 측정이 가능**합니다. User의 영향요인 측정은 개발 예정입니다.
+
 GitHub influence factors counter를 활용하면 Repositories, Members, Contributors, Stars, Forks, Watches, Commits와 같은 영향요인의 수를 보다 편하게 확인할 수 있습니다. :thumbsup:   
 Open Source Software (OSS) 관련 프로젝트에서 편리하게 활용하시기 바랍니다. :smile:   
 
