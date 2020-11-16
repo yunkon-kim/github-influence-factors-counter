@@ -6,6 +6,62 @@ from datetime import date
 import requests
 from dateutil.relativedelta import relativedelta
 
+DAY_GAP = 4
+
+
+def get_commits_per_month(link, first_day, last_day):
+    number_of_commits_in_a_month = 0
+    page = 1
+
+    while True:
+        commit_link = link + "/commits?since=" + first_day.strftime('%Y-%m-%d') + "&until=" + last_day.strftime(
+            '%Y-%m-%d') + "&page=" + str(page)
+        commits = json.loads(gh_session.get(commit_link).text)
+        num = int(len(commits))
+        print("since=%s&until=%s&page=%s" % (first_day, last_day, str(page)))
+        print("Number of commits in a page: %s" % num)
+
+        number_of_commits_in_a_month += num
+
+        if num < 30:
+            break
+        page += 1
+
+    return number_of_commits_in_a_month
+
+
+# start = first_day
+# # end = last_day
+# end = start + relativedelta(days=(DAY_GAP - 1))
+#
+# next_start = start + relativedelta(months=1)
+#
+# number_of_commits_in_a_month = 0
+#
+# # day loop
+# while start < next_start:
+#     page = 1
+#     # page loop
+#     while True:
+#         commit_link = link + "/commits?since=" + start.strftime('%Y-%m-%d') + "&until=" + end.strftime(
+#             '%Y-%m-%d') + "&page=" + str(page)
+#         commits = json.loads(gh_session.get(commit_link).text)
+#         num = int(len(commits))
+#         print("since=%s&until=%s&page=%s" % (start, end, str(page)))
+#         print("Number of commits in a page: %s" % num)
+#
+#         number_of_commits_in_a_month = number_of_commits_in_a_month + num
+#         page = page + 1
+#
+#         if num < 30:
+#             break
+#
+#     start = start + relativedelta(days=DAY_GAP)
+#     end = end + relativedelta(days=DAY_GAP)
+#     if end >= next_start:
+#         end = next_start - datetime.timedelta(days=1)
+
+
 if __name__ == '__main__':
 
     with open('auth.json') as auth_file:
@@ -102,23 +158,26 @@ if __name__ == '__main__':
         while end_date < today:
             # print(start_date)
             # print(end_date)
-            commit_link = repos_api_root + repo["full_name"] + "/commits?since=" + start_date.strftime(
-                '%Y-%m-%d') + "&until=" + end_date.strftime('%Y-%m-%d')
+
+            # page iteration is necessary because a page show max 100 commits
+            commits_in_a_month = get_commits_per_month((repos_api_root + repo["full_name"]),
+                                                       start_date, end_date)
 
             # with urllib.request.urlopen(commit_link) as commit_url:
             #     commits = json.loads(commit_url.read().decode())
-            commits = json.loads(gh_session.get(commit_link).text)
-            number_of_commits.append(int(len(commits)))
+            # commits = json.loads(gh_session.get(commit_link).text)
+            number_of_commits.append(commits_in_a_month)
 
             start_date = start_date + relativedelta(months=1)
-            end_date = end_date + relativedelta(months=1)
+            end_date = (start_date + relativedelta(months=1)) - datetime.timedelta(days=1)
 
-        commit_link2 = repos_api_root + repo["full_name"] + "/commits?since=" + start_date.strftime(
-            '%Y-%m-%d') + "&until=" + today.strftime('%Y-%m-%d')
+        commits_in_a_month = get_commits_per_month((repos_api_root + repo["full_name"]), start_date,
+                                                   end_date)
+
         # with urllib.request.urlopen(commit_link2) as commit_url2:
         #     commits2 = json.loads(commit_url2.read().decode())
-        commits2 = json.loads(gh_session.get(commit_link2).text)
-        number_of_commits.append(int(len(commits2)))
+        # commits2 = json.loads(gh_session.get(commit_link2).text)
+        number_of_commits.append(commits_in_a_month)
 
         print("Contributors: %s" % number_of_contributors)
         print("Stars: %s" % (repo_info["stargazers_count"]))
