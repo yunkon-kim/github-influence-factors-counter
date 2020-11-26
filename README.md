@@ -20,7 +20,7 @@ GitHub API 사용에 Rating limit이 있기 때문에 설정 하는 것이 좋�
 ```json
 {
   "username": "xxxxxxx",
-  "password": "xxxxxxx"
+  "personal-access-token": "xxxxxxx"
 }
 ```
 
@@ -43,25 +43,3 @@ GitHub API 사용에 Rating limit이 있기 때문에 설정 하는 것이 좋�
 결과2:
 `repos-result.csv`는 Repository, Stars, Forks, Watches, Commits(year)을 포함합니다. 
 
-
-### 비고 `repos.json`에 자신의 레포지토리를 기입하고, 특정 Repository만 조회도 가능합니다.
-기존 코드를 주석처리하고, 현재 주석 처리를 해제 해야합니다.
-
-아래 "Path" 기입시, Onwer/Repository 또는 Organization/Repository 형태로 기입합니다.   
-예) hermitkim1/github-influence-factors-counter 또는 cloud-barista/cb-spider   
-```json
-[
-  {
-    "Name": "cb-spier",
-    "Path": "cloud-barista/cb-spider"
-  },
-  {
-    "Name": "cb-tumblebug",
-    "Path": "cloud-barista/cb-tumblebug-api-web"
-  },
-  {
-    "Name": "xxx",
-    "Path": "xxx"
-  }
-]
-```
