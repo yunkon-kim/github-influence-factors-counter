@@ -6,7 +6,11 @@ from datetime import date
 import requests
 from dateutil.relativedelta import relativedelta
 
-DAY_GAP = 4
+# 'staring_date' and 'ending_date' are only needed for counting number of commits
+starting_date = datetime.date(2019, 1, 1)
+# starting_date.strftime('%Y-%m-%d')
+ending_date = datetime.date(2020, 11, 30)
+# ending_date.strftime('%Y-%m-%d')
 
 
 def get_commits_per_month(link, first_day, last_day, name, is_filtered_by_name):
@@ -33,38 +37,6 @@ def get_commits_per_month(link, first_day, last_day, name, is_filtered_by_name):
         page += 1
 
     return number_of_commits_in_a_month
-
-
-# start = first_day
-# # end = last_day
-# end = start + relativedelta(days=(DAY_GAP - 1))
-#
-# next_start = start + relativedelta(months=1)
-#
-# number_of_commits_in_a_month = 0
-#
-# # day loop
-# while start < next_start:
-#     page = 1
-#     # page loop
-#     while True:
-#         commit_link = link + "/commits?since=" + start.strftime('%Y-%m-%d') + "&until=" + end.strftime(
-#             '%Y-%m-%d') + "&page=" + str(page)
-#         commits = json.loads(gh_session.get(commit_link).text)
-#         num = int(len(commits))
-#         print("since=%s&until=%s&page=%s" % (start, end, str(page)))
-#         print("Number of commits in a page: %s" % num)
-#
-#         number_of_commits_in_a_month = number_of_commits_in_a_month + num
-#         page = page + 1
-#
-#         if num < 30:
-#             break
-#
-#     start = start + relativedelta(days=DAY_GAP)
-#     end = end + relativedelta(days=DAY_GAP)
-#     if end >= next_start:
-#         end = next_start - datetime.timedelta(days=1)
 
 
 if __name__ == '__main__':
@@ -136,7 +108,9 @@ if __name__ == '__main__':
 
     # Header
     user_repos_result_writer.writerow(
-        ["Repo", "Contributors", "Stars", "Forks", "Watches", "Commits(" + str(this_year) + ")"])
+        ["Repo", "Contributors", "Stars", "Forks", "Watches", "Commits in the period"])
+
+    monthly_commits_of_repos = []
 
     # Read repos from a repos_url from organization
     repos = json.loads(gh_session.get(user_info["repos_url"]).text)
@@ -154,33 +128,33 @@ if __name__ == '__main__':
 
         # Request the number of monthly commits
         # reference: https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#list-commits
+
         today = date.today()
-        this_year = today.year
-        start_date = datetime.date(this_year, 1, 1)
-        start_date.strftime('%Y-%m-%d')
-        end_date = datetime.date(this_year, 1, 31)
-        end_date.strftime('%Y-%m-%d')
+        the_first_day_of_the_month = starting_date
+        the_last_day_of_the_month = (the_first_day_of_the_month + relativedelta(months=1)) - datetime.timedelta(days=1)
 
         number_of_commits = []
 
-        while end_date < today:
+        while the_last_day_of_the_month < today and the_last_day_of_the_month < ending_date:
             # print(start_date)
             # print(end_date)
 
             # page iteration is necessary because a page show max 100 commits
             commits_in_a_month = get_commits_per_month((repos_api_root + repo["full_name"]),
-                                                       start_date, end_date, user_info["name"], is_filtered_by_name)
+                                                       the_first_day_of_the_month, the_last_day_of_the_month,
+                                                       user_info["name"], is_filtered_by_name)
 
             # with urllib.request.urlopen(commit_link) as commit_url:
             #     commits = json.loads(commit_url.read().decode())
             # commits = json.loads(gh_session.get(commit_link).text)
             number_of_commits.append(commits_in_a_month)
 
-            start_date = start_date + relativedelta(months=1)
-            end_date = (start_date + relativedelta(months=1)) - datetime.timedelta(days=1)
+            the_first_day_of_the_month = the_first_day_of_the_month + relativedelta(months=1)
+            the_last_day_of_the_month = (the_first_day_of_the_month + relativedelta(months=1)) - datetime.timedelta(
+                days=1)
 
-        commits_in_a_month = get_commits_per_month((repos_api_root + repo["full_name"]), start_date,
-                                                   end_date, user_info["name"], is_filtered_by_name)
+        commits_in_a_month = get_commits_per_month((repos_api_root + repo["full_name"]), the_first_day_of_the_month,
+                                                   ending_date, user_info["name"], is_filtered_by_name)
 
         # with urllib.request.urlopen(commit_link2) as commit_url2:
         #     commits2 = json.loads(commit_url2.read().decode())
@@ -191,12 +165,45 @@ if __name__ == '__main__':
         print("Stars: %s" % (repo_info["stargazers_count"]))
         print("Forks: %s" % (repo_info["forks_count"]))
         print("Watches: %s" % (repo_info["subscribers_count"]))
-        print("Commits in this year: %s" % (sum(number_of_commits)))
+        print("Commits in the period: %s" % (sum(number_of_commits)))
 
         user_repos_result_writer.writerow(
             [repo_info["name"], number_of_contributors, repo_info["stargazers_count"], repo_info["forks_count"],
              repo_info["subscribers_count"],
              sum(number_of_commits)])
 
+        temp = [repo["name"], ]
+        temp.extend(number_of_commits)
+        monthly_commits_of_repos.append(temp)
+
+    #############################################################################
+    # Repositories' monthly commits in the period
+    user_repos_monthly_commits_file = open("./results/user-monthly-commits.csv", "w", newline="")
+    user_repos_monthly_commits_writer = csv.writer(user_repos_monthly_commits_file)
+
+    # Create header
+    header = ["YYYY-MM", ]
+    year_month = starting_date
+
+    while year_month <= ending_date:
+        header.append(year_month.strftime('%Y-%m'))
+        year_month = year_month + relativedelta(months=1)
+
+    header.append("Sum")
+
+    # Write header
+    user_repos_monthly_commits_writer.writerow(header)
+
+    # Write data
+    # Data structure in a row : [repo name, commits[0], commits[1], ......, sum of commits]
+    for monthly_commits_of_a_repo in monthly_commits_of_repos:
+        # Create row
+        row = monthly_commits_of_a_repo                   # [repo name, commits[0], .... commits[n]]
+        row.extend([sum(monthly_commits_of_a_repo[1:])])  # [repo name, commits[0], .... commits[n], sum of commits]
+
+        # Write row
+        user_repos_monthly_commits_writer.writerow(row)
+
+    user_repos_monthly_commits_file.close()
     user_repos_result_file.close()
     gh_session.close()
