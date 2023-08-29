@@ -1,3 +1,9 @@
-*.csv
-auth.json
 .idea/
+
+*.csv
+*.log
+
+auth.json
+orgs.json
+repos-ignore.json
+users.json
