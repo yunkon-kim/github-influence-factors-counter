@@ -1,9 +1,10 @@
 .idea/
 
+*.xlsx
 *.csv
 *.log
 
 auth.json
-orgs.json
+org.json
 repos-ignore.json
 users.json
