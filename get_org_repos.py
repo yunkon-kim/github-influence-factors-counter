@@ -14,7 +14,7 @@ def get_organization_repos(org_name, access_token=None):
     Returns:
         list of str: List of repository names
     """
-    url = f"https://api.github.com/orgs/{org_name}/repos"
+    url = f"https://api.github.com/orgs/{org_name}/repos?per_page=100"
     headers = {}
     if access_token:
         headers["Authorization"] = f"token {access_token}"
