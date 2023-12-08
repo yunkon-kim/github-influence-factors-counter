@@ -8,3 +8,6 @@ auth.json
 org.json
 repos-ignore.json
 users.json
+config.json
+
+.venv/

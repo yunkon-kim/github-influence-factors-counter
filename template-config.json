@@ -1,0 +1,8 @@
+{
+  "org-name": "your-organization-name",
+  "repositories": [
+    "repo1",
+    "repo2",
+    "repo3"
+  ]
+}
