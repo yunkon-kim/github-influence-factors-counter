@@ -14,8 +14,38 @@ Organization의 영향요인 측정 및 User의 영향요인 측정을 구분하
 
 ## 사용방법
 ### 조직(Organization)의 영향요인 측정
-#### 1. 본 레포지토리를 `clone`합니다.
-#### 2. `auth.json` 생성
+#### 소스코드 내려 받기
+
+`git clone`을 통해 소스 코드를 내려 받습니다.
+
+```bash
+git clone https://github.com/yunkon-kim/github-influence-factors-counter.git
+```
+
+#### 실행 환경 구성
+
+참고 - 최초 한번만 수행하면 되는 사항입니다.
+
+##### `venv` 환경 설절
+
+`venv`를 설정 합니다. `./venv` 디렉토리가 생성되고 `venv` 관련 사항들이 설치됩니다.
+```bash
+python3 -m venv ./venv
+```
+
+`venv` 활성화
+```bash
+source .venv/bin/activate
+```
+
+##### Python 모듈 설치
+
+```bash
+pip install -r requirements.txt
+```
+
+
+#### 3. `auth.json` 생성
 GitHub API 사용에 Rating limit이 있기 때문에 설정 하는 것이 좋습니다.   
 아래 양식을 바탕으로 `auth.json`을 `orgs.py` 또는 `users.py`가 있는 위치에 생성합니다.   
 ```json

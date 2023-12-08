@@ -1,33 +1,478 @@
 import csv
 import datetime
 import json
-from datetime import date
-import os
-
-import requests
-from dateutil.relativedelta import relativedelta
-
-import urllib.parse
-
 import logging
+import os
+import urllib.parse
+from datetime import date
 
 import pandas as pd
+import requests
+from dateutil.relativedelta import relativedelta
+import sys
 
-logging.basicConfig(
-    filename="github-influence-factors-counter.log", level=logging.DEBUG
-)
-
-# 'start_date' and 'end_date' are only needed for counting number of commits
-start_date = datetime.date(2023, 4, 1)
-# starting_date.strftime('%Y-%m-%d')
-end_date = datetime.date(2023, 12, 31)
-# ending_date.strftime('%Y-%m-%d')
-
-# Rate limiting: https://developer.github.com/v3/#rate-limiting
+##############################################################################
+# Constants
 BASE_URL_OF_ORGS_API = "https://api.github.com/orgs/"
 REPOS_API_URL = "http://api.github.com/repos/"
-
 PER_PAGE_100 = "100"  # Default 30, Max 100
+# Rate limiting: https://developer.github.com/v3/#rate-limiting
+
+##############################################################################
+# Logging
+
+# Create a logger
+logger = logging.getLogger("my_logger")
+logger.setLevel(logging.DEBUG)
+
+# Create handlers: one for file and one for stdout
+file_handler = logging.FileHandler("app.log")
+stdout_handler = logging.StreamHandler()
+
+# Set logging level for each handler (optional, can be different for each handler)
+file_handler.setLevel(logging.DEBUG)
+stdout_handler.setLevel(logging.INFO)
+
+# Create a formatter with caller details and set it for both handlers
+# This will include file name, function name, and line number
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(funcName)s:%(lineno)d] - %(message)s"
+)
+file_handler.setFormatter(formatter)
+stdout_handler.setFormatter(formatter)
+
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(stdout_handler)
+
+##############################################################################
+# Read configs
+
+# Create a directory for results
+directory = os.path.join("results")
+os.makedirs(directory, exist_ok=True)
+
+# Read auth.json
+with open("auth.json") as auth_file:
+    auth_info = json.load(auth_file)
+
+username = auth_info["username"]
+personal_access_token = auth_info["personal-access-token"]
+
+auth_file.close()
+
+# Read config.json file
+with open("config.json") as config_file:
+    config = json.load(config_file)
+
+org_name = config["org-name"]
+repositories = config["repositories"]
+since = config["since"]
+until = config["until"]
+
+config_file.close()
+
+try:
+    # Convert 'since' and 'until' to datetime.date objects
+    since = datetime.datetime.strptime(since, "%Y-%m-%d").date()
+    until = datetime.datetime.strptime(until, "%Y-%m-%d").date()
+except ValueError:
+    print("Invalid date format. Please make sure the date format is YYYY-MM-DD.")
+    sys.exit(1)
+
+##############################################################################
+# Create a session
+gh_session = requests.Session()
+
+
+def request_github_api(url, params=None):
+    global gh_session
+    """
+    Makes a request to a specified GitHub API endpoint and fetches data.
+
+    :param url: URL of the GitHub API endpoint.
+    :param params: Dictionary of query parameters (optional).
+    :return: JSON response from the API if successful, otherwise raises an exception.
+    """
+
+    logger.debug("Request URL: %s" % url)
+    logger.debug("Request params: %s" % params)
+
+    try:
+        response = gh_session.get(url, params=params)
+
+        # Check if the request was successful.
+        if response.status_code == 200:
+            return response.json()
+
+        # Handle rate limit exceeded error.
+        elif response.status_code == 403:
+            raise Exception("API request rate limit exceeded.")
+
+        # Handle other errors.
+        else:
+            raise Exception(f"API error: {response.status_code}")
+
+    except requests.exceptions.RequestException as e:
+        # Handle network errors.
+        raise Exception(f"Network error: {e}")
+
+
+def get_orgs_info(orgs_name):
+    global BASE_URL_OF_ORGS_API, PER_PAGE_100
+    ###########################################################################
+    # Result of organization information
+
+    # Request organization information
+    orgs_url = BASE_URL_OF_ORGS_API + orgs_name
+    try:
+        # Request GitHub API
+        response_json = request_github_api(orgs_url)
+    except Exception as e:
+        # Handle any errors that occurred during the API request.
+        print("Error occurred: ", e)
+    org_info = response_json
+
+    # Request organization members
+    params = {"per_page": PER_PAGE_100}
+    # e.g., "members_url":
+    # "https://api.github.com/orgs/cloud-barista/members{/member}"
+    members_url = org_info["members_url"].split("{")[0]
+
+    try:
+        # Request GitHub API
+        response_json = request_github_api(members_url, params)
+    except Exception as e:
+        # Handle any errors that occurred during the API request.
+        logger.error("Error occurred: ", e)
+
+    members_info = response_json
+
+    logger.debug("Organization name: %s" % org_info["name"])
+    logger.debug("Public repos: %s" % (org_info["public_repos"]))
+    logger.debug("Members: %s" % (len(members_info)))
+
+    # Create a file for results
+    orgs_result_file = open("./results/orgs-info.csv", "w", newline="")
+    orgs_result_writer = csv.writer(orgs_result_file)
+
+    # CSV header
+    orgs_result_writer.writerow(["Organization", "Public repositories", "Members"])
+    orgs_result_writer.writerow(
+        [org_info["name"], org_info["public_repos"], len(members_info)]
+    )
+
+    orgs_result_file.close()
+
+    return org_info
+
+
+def get_contributors(url_contributors):
+    number_of_contributors = 0
+    page = 1
+    while True:
+        params = {"page": str(page), "per_page": PER_PAGE_100}
+
+        try:
+            # Request GitHub API
+            response_json = request_github_api(url_contributors, params)
+        except Exception as e:
+            # Handle any errors that occurred during the API request.
+            logger.error("Error occurred: ", e)
+
+        contributors = response_json
+        num = len(contributors)
+
+        if num == 0:
+            break
+
+        number_of_contributors += num
+        page += 1
+
+    return number_of_contributors
+
+
+def get_commits_during_the_period(url_commits, since, until):
+    total_commits_count = 0
+    page = 1
+
+    while True:
+        params = {
+            "since": since,
+            "until": until,
+            "page": str(page),
+            "per_page": PER_PAGE_100,
+        }
+
+        try:
+            # Request GitHub API
+            response_json = request_github_api(url_commits, params)
+        except Exception as e:
+            # Handle any errors that occurred during the API request.
+            logger.error("Error occurred: ", e)
+
+        commits = response_json
+
+        num = int(len(commits))
+        logger.debug("Number of commits in a page: %s" % num)
+
+        if num == 0:
+            break
+
+        total_commits_count += num
+        page += 1
+
+    return total_commits_count
+
+
+def get_forks_since(url_forks, since):
+    number_of_forks_in_a_month = 0
+
+    params = {"per_page": PER_PAGE_100}
+
+    request_url = url_forks + "?" + urllib.parse.urlencode(params)
+    forks = json.loads(gh_session.get(request_url).text)
+
+    for fork in forks:
+        create_at = datetime.datetime.strptime(fork["created_at"], "%Y-%m-%dT%H:%M:%SZ")
+        create_at = create_at.date()
+        if create_at >= since:
+            number_of_forks_in_a_month += 1
+        else:
+            break
+
+    return number_of_forks_in_a_month
+
+
+def get_issues_since(url_issues, state, since):
+    global PER_PAGE_100
+    page = 1
+    closed_issues_count = 0
+
+    while True:
+        params = {
+            "state": "closed",
+            "since": since,
+            "page": page,
+            "per_page": PER_PAGE_100,
+        }
+
+        try:
+            # Request GitHub API
+            response_json = request_github_api(url_issues, params)
+        except Exception as e:
+            # Handle any errors that occurred during the API request.
+            logger.error("Error occurred: ", e)
+
+        issues = response_json
+
+        # Break loop if no issues are returned
+        if not issues:
+            break
+
+        # Count issues closed in the period
+        closed_issues_count += sum(1 for issue in issues if "pull_request" not in issue)
+
+        page += 1
+
+    return closed_issues_count
+
+
+def get_prs_since(url_prs, state, since):
+    global PER_PAGE_100
+    page = 1
+    closed_prs_count = 0
+
+    while True:
+        params = {
+            "state": "closed",
+            "since": since,
+            "page": page,
+            "per_page": PER_PAGE_100,
+        }
+
+        try:
+            # Request GitHub API
+            response_json = request_github_api(url_prs, params)
+        except Exception as e:
+            # Handle any errors that occurred during the API request.
+            logger.error("Error occurred: ", e)
+
+        issues = response_json
+
+        # Break loop if no issues are returned
+        if not issues:
+            break
+
+        # Count issues closed in the period
+        closed_prs_count += sum(1 for issue in issues if "pull_request" in issue)
+
+        page += 1
+
+    return closed_prs_count
+
+
+def get_target_repos_info(repos_url, target_repos):
+    global org_name, since, until, gh_session, REPOS_API_URL, PER_PAGE_100
+
+    ##########################################################################
+    # Target repos information
+
+    outputfile_name = (
+        "./results/("
+        + org_name
+        + ")repos-statistics-rawdata-"
+        + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        + ".csv"
+    )
+
+    logger.info("Output file: %s" % outputfile_name)
+
+    # Create a file for results
+    logger.debug("Create a file for results")
+    orgs_result_file = open(outputfile_name, "w", newline="")
+    orgs_result_writer = csv.writer(orgs_result_file)
+
+    # CSV header
+    headers = [
+        "Repo",
+        "Repo link",
+        f"Commits since {since} until {until}",
+        "Stars total",
+        f"Issues (closed) since {since}",
+        f"Pull requests (closed) since {since}",
+        "Contributors",
+        "Forks total",
+        f"Forks since {since}",
+        "Watches total",
+    ]
+
+    # Write header
+    orgs_result_writer.writerow(headers)
+
+    # Setup a dataframe for statistics
+    df_repos_info = pd.DataFrame(columns=headers)
+
+    # Read repos from a repos_url from organization
+    logger.debug("Read repos from a repos_url from organization")
+    params = {"per_page": PER_PAGE_100}
+    repos = request_github_api(repos_url, params)
+
+    for repo in repos:
+        if repo["name"] not in target_repos:
+            logger.debug("Skip repo: %s" % repo["name"])
+            continue
+
+        logger.info("Starting to get %s's info" % repo["name"])
+
+        # Request repository statistics/information
+        # to get the number of stars, forks, watches
+        logger.info("Get this repository information")
+        repo_api_url = REPOS_API_URL + repo["full_name"]
+        repo_info = request_github_api(repo_api_url)
+
+        # Request the number of contributors
+        logger.info("Get the number of contributors")
+        number_of_contributors = get_contributors(repo_info["contributors_url"])
+
+        # Request the number of commits
+        # reference:
+        # https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#list-commits
+
+        logger.info("Get the number of commits since %s until %s" % (since, until))
+        commits_url = REPOS_API_URL + repo["full_name"] + "/commits"
+        number_of_commits = get_commits_during_the_period(commits_url, since, until)
+
+        logger.info("Get the number of forks since %s" % since)
+        forks_url = repo_info["forks_url"]
+        number_of_forks = get_forks_since(forks_url, since)
+
+        logger.info("Get the number of issues closed since %s" % since)
+        issues_url = REPOS_API_URL + repo["full_name"] + "/issues"
+        number_of_issues_closed = get_issues_since(issues_url, "closed", since)
+
+        logger.info("Get the number of pull requests closed since %s" % since)
+        # prs_url = REPOS_API_URL + repo["full_name"] + "/pulls"
+        number_of_prs_closed = get_prs_since(issues_url, "closed", since)
+
+        repo_name = repo["name"]
+        repo_link = "https://github.com/" + repo["full_name"]
+
+        logger.debug("Repo name: %s" % repo_info["name"])
+        logger.debug("Repo link: %s" % repo_link)
+        logger.debug(
+            "Commits (since %s until %s): %s" % (since, until, number_of_commits)
+        )
+        logger.debug("Stars: %s" % (repo_info["stargazers_count"]))
+        logger.debug("Issues closed (since %s): %s" % (since, number_of_issues_closed))
+        logger.debug(
+            "Pull requests closed (since %s): %s" % (since, number_of_prs_closed)
+        )
+        logger.debug("Contributors: %s" % number_of_contributors)
+        logger.debug("Forks: %s" % (repo_info["forks_count"]))
+        logger.debug("Forks (since %s): %s" % (since, number_of_forks))
+        logger.debug("Watches: %s" % (repo_info["subscribers_count"]))
+
+        row = [
+            repo_info["name"],
+            repo_link,
+            number_of_commits,
+            repo_info["stargazers_count"],
+            number_of_issues_closed,
+            number_of_prs_closed,
+            number_of_contributors,
+            repo_info["forks_count"],
+            number_of_forks,
+            repo_info["subscribers_count"],
+        ]
+
+        df_repos_info.loc[len(df_repos_info)] = row
+
+        orgs_result_writer.writerow(row)
+
+    # Sum all rows for each column except column 0 and 1
+    column_sums = df_repos_info.iloc[:, 2:].sum(axis=0)
+    row = pd.Series(["Sum", "-"])._append(column_sums)
+
+    orgs_result_writer.writerow(row)
+
+    logger.info("Saved all repos info")
+    orgs_result_file.close()
+
+    return df_repos_info
+
+
+if __name__ == "__main__":
+    logger.info("Starting to get organization information")
+
+    # global gh_session, org_name, repositories, username, personal_access_token
+
+    if repositories:
+        logger.info("Target repositories: %s" % repositories)
+
+    # # Get today's date
+    # today = date.today()
+    # this_year = today.year
+
+    # Set auth info
+    gh_session.auth = (username, personal_access_token)
+
+    # Get organization information
+    logger.info("Getting organization information")
+    org_info = get_orgs_info(org_name)
+
+    logger.info("Getting target repositories information")
+    df_repos_info = get_target_repos_info(org_info["repos_url"], repositories)
+
+    # get_repos_commits(org_info["repos_url"], repos_ignore)
+    # get_monthly_commits(org_info["repos_url"], repos_ignore)
+
+    gh_session.close()
+
+##################################################################
+##################################################################
+##################################################################
+# Keep this code
 
 # Test code - GitHub API example
 #  http://api.github.com/repos/[username]/[reponame]
@@ -41,242 +486,170 @@ PER_PAGE_100 = "100"  # Default 30, Max 100
 # print("Watches: %s" % (data["subscribers_count"]))
 
 
-def get_orgs_info(orgs_name):
-    global BASE_URL_OF_ORGS_API, PER_PAGE_100
-    ###########################################################################
-    # Result of organization information
+def get_all_repos_info(repos_url):
+    global org_name, since, until, gh_session, REPOS_API_URL, PER_PAGE_100
 
-    # Request organization information
-    orgs_url = BASE_URL_OF_ORGS_API + orgs_name
-    org_info = json.loads(gh_session.get(orgs_url).text)
+    ##########################################################################
+    # Target repos information
 
-    # logging.debug(org_info)
+    outputfile_name = (
+        "./results/("
+        + org_name
+        + ")repos-statistics-rawdata-"
+        + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        + ".csv"
+    )
 
-    # Request organization members
-    params = {"per_page": PER_PAGE_100}
-    # e.g., "members_url":
-    # "https://api.github.com/orgs/cloud-barista/members{/member}"
-    members_url = org_info["members_url"].split("{")[0]
-
-    request_url = members_url + "?" + urllib.parse.urlencode(params)
-    members_info = json.loads(gh_session.get(request_url).text)
-
-    logging.debug("Organization name: %s" % org_info["name"])
-    logging.debug("Public repos: %s" % (org_info["public_repos"]))
-    logging.debug("Members: %s" % (len(members_info)))
+    logger.info("Output file: %s" % outputfile_name)
 
     # Create a file for results
-    orgs_result_file = open("./results/orgs-info.csv", "w", newline="")
+    logger.debug("Create a file for results")
+    orgs_result_file = open(outputfile_name, "w", newline="")
     orgs_result_writer = csv.writer(orgs_result_file)
 
     # CSV header
-    orgs_result_writer.writerow(
-        ["Organization", "Public repositories", "Members"])
-    orgs_result_writer.writerow(
-        [org_info["name"], org_info["public_repos"], len(members_info)]
-    )
-
-    orgs_result_file.close()
-
-    return org_info
-
-
-def get_contributors(contributors_url):
-    number_of_contributors = 0
-    page = 1
-    while True:
-        params = {"page": str(page), "per_page": PER_PAGE_100}
-
-        request_url = contributors_url + "?" + urllib.parse.urlencode(params)
-        contributors = json.loads(gh_session.get(request_url).text)
-        num = len(contributors)
-
-        if num == 0:
-            break
-
-        number_of_contributors += num
-        page += 1
-
-    return number_of_contributors
-
-
-def get_commits_during_a_period(commit_url, start, end):
-    number_of_commits_in_a_month = 0
-    page = 1
-
-    while True:
-        params = {
-            "since": start.strftime("%Y-%m-%d"),
-            "until": end.strftime("%Y-%m-%d"),
-            "page": str(page),
-            "per_page": PER_PAGE_100,
-        }
-
-        request_url = commit_url + "?" + urllib.parse.urlencode(params)
-        commits = json.loads(gh_session.get(request_url).text)
-        num = int(len(commits))
-        logging.debug(urllib.parse.urlencode(params))
-        logging.debug("Number of commits in a page: %s" % num)
-
-        if num == 0:
-            break
-
-        number_of_commits_in_a_month += num
-        page += 1
-
-    return number_of_commits_in_a_month
-
-
-def get_forks_since_the_input_date(forks_url, start_date):
-    number_of_forks_in_a_month = 0
-
-    params = {"per_page": PER_PAGE_100}
-
-    request_url = forks_url + "?" + urllib.parse.urlencode(params)
-    forks = json.loads(gh_session.get(request_url).text)
-
-    for fork in forks:
-        create_at = datetime.datetime.strptime(
-            fork["created_at"], "%Y-%m-%dT%H:%M:%SZ")
-        create_at = create_at.date()
-        if create_at >= start_date:
-            number_of_forks_in_a_month += 1
-        else:
-            break
-
-    return number_of_forks_in_a_month
-
-
-def get_repos_info(repos_url, repos_ignore):
-    global start_date, end_date
-
-    ##########################################################################
-    # Results of each repository
-    # repos_result_file = open("./results/repos-info.csv", "w", newline="")
-    # repos_result_writer = csv.writer(repos_result_file)
-
-    # repos_result_writer.writerow(
-    #     ["Period", starting_date, ending_date])
-
     headers = [
         "Repo",
-        "Contributors",
+        "Repo link",
+        f"Commits since {since} until {until}",
         "Stars total",
+        f"Issues (closed) since {since}",
+        f"Pull requests (closed) since {since}",
+        "Contributors",
         "Forks total",
+        f"Forks since {since}",
         "Watches total",
-        "Commits during the period",
-        "Forks during the preiod",
     ]
 
-    # repos_result_writer.writerow(headers)
+    # Write header
+    orgs_result_writer.writerow(headers)
 
+    # Setup a dataframe for statistics
     df_repos_info = pd.DataFrame(columns=headers)
 
-    # monthly_commits_of_repos = []
-
-    params = {"per_page": PER_PAGE_100}
-    request_url = repos_url + "?" + urllib.parse.urlencode(params)
-
     # Read repos from a repos_url from organization
-    repos = json.loads(gh_session.get(request_url).text)
-
-    # logging.debug(repos)
+    logger.debug("Read repos from a repos_url from organization")
+    params = {"per_page": PER_PAGE_100}
+    repos = request_github_api(repos_url, params)
 
     for repo in repos:
-        if repo["name"] in repos_ignore:
-            continue
-
-        repo_link = REPOS_API_URL + repo["full_name"]
+        logger.info("Starting to get %s's info" % repo["name"])
 
         # Request repository statistics/information
         # to get the number of stars, forks, watches
-        repo_info = json.loads(gh_session.get(repo_link).text)
+        logger.info("Get this repository information")
+        repo_api_url = REPOS_API_URL + repo["full_name"]
+        repo_info = request_github_api(repo_api_url)
 
         # Request the number of contributors
-        number_of_contributors = get_contributors(
-            repo_info["contributors_url"])
+        logger.info("Get the number of contributors")
+        number_of_contributors = get_contributors(repo_info["contributors_url"])
 
-        # Request the number of monthly commits
+        # Request the number of commits
         # reference:
         # https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#list-commits
 
-        today = date.today()
-        first_day_of_the_month = start_date
-        last_day_of_the_month = first_day_of_the_month + relativedelta(
-            months=1
-        )  # - datetime.timedelta(days=1)
-
-        number_of_commits = []
-
+        logger.info("Get the number of commits since %s until %s" % (since, until))
         commits_url = REPOS_API_URL + repo["full_name"] + "/commits"
-        while (
-            last_day_of_the_month < today and
-            last_day_of_the_month < end_date
-        ):
-            # page iteration is necessary because a page show max 100 commits
-            commits_in_a_month = get_commits_during_a_period(
-                commits_url,
-                first_day_of_the_month,
-                last_day_of_the_month
-            )
+        number_of_commits = get_commits_during_the_period(commits_url, since, until)
 
-            number_of_commits.append(commits_in_a_month)
-
-            delta = relativedelta(months=1)
-            first_day_of_the_month = first_day_of_the_month + delta
-            last_day_of_the_month = first_day_of_the_month + delta
-            # - datetime.timedelta(days=1)
-
-        commits_in_a_month = get_commits_during_a_period(
-            commits_url, first_day_of_the_month, end_date
-        )
-
-        number_of_commits.append(commits_in_a_month)
-
+        logger.info("Get the number of forks since %s" % since)
         forks_url = repo_info["forks_url"]
-        number_of_forks_after_certain_day = get_forks_since_the_input_date(
-            forks_url, start_date
+        number_of_forks = get_forks_since(forks_url, since)
+
+        logger.info("Get the number of issues closed since %s" % since)
+        issues_url = REPOS_API_URL + repo["full_name"] + "/issues"
+        number_of_issues_closed = get_issues_since(issues_url, "closed", since)
+
+        logger.info("Get the number of pull requests closed since %s" % since)
+        # prs_url = REPOS_API_URL + repo["full_name"] + "/pulls"
+        number_of_prs_closed = get_prs_since(issues_url, "closed", since)
+
+        repo_name = repo["name"]
+        repo_link = "https://github.com/" + repo["full_name"]
+
+        logger.debug("Repo name: %s" % repo_info["name"])
+        logger.debug("Repo link: %s" % repo_link)
+        logger.debug(
+            "Commits (since %s until %s): %s" % (since, until, number_of_commits)
         )
+        logger.debug("Stars: %s" % (repo_info["stargazers_count"]))
+        logger.debug("Issues closed (since %s): %s" % (since, number_of_issues_closed))
+        logger.debug(
+            "Pull requests closed (since %s): %s" % (since, number_of_prs_closed)
+        )
+        logger.debug("Contributors: %s" % number_of_contributors)
+        logger.debug("Forks: %s" % (repo_info["forks_count"]))
+        logger.debug("Forks (since %s): %s" % (since, number_of_forks))
+        logger.debug("Watches: %s" % (repo_info["subscribers_count"]))
 
-        logging.debug("Contributors: %s" % number_of_contributors)
-        logging.debug("Stars: %s" % (repo_info["stargazers_count"]))
-        logging.debug("Forks: %s" % (repo_info["forks_count"]))
-        logging.debug("Watches: %s" % (repo_info["subscribers_count"]))
-        logging.debug("Commits during the period: %s" % sum(number_of_commits))
-        logging.debug(
-            "Forks during the period: %s" % number_of_forks_after_certain_day)
-
-        df_repos_info.loc[len(df_repos_info)] = [
+        row = [
             repo_info["name"],
-            number_of_contributors,
+            repo_link,
+            number_of_commits,
             repo_info["stargazers_count"],
+            number_of_issues_closed,
+            number_of_prs_closed,
+            number_of_contributors,
             repo_info["forks_count"],
+            number_of_forks,
             repo_info["subscribers_count"],
-            sum(number_of_commits),
-            number_of_forks_after_certain_day,
         ]
 
-    df_repos_info.to_csv(
-        "./results/repos-info.csv", mode="w", header=True, index=False)
+        df_repos_info.loc[len(df_repos_info)] = row
+
+        orgs_result_writer.writerow(row)
+
+    logger.info("Saved all repos info")
+    orgs_result_file.close()
 
     return df_repos_info
 
 
+def get_prs(url_prs, state):
+    number_of_prs = 0
+    page = 1
+
+    while True:
+        params = {
+            "page": str(page),
+            "per_page": PER_PAGE_100,
+            "state": state,
+        }
+
+        request_url = url_prs + "?" + urllib.parse.urlencode(params)
+        prs = json.loads(gh_session.get(request_url).text)
+        num = int(len(prs))
+        logger.debug(urllib.parse.urlencode(params))
+        logger.debug("Number of commits in a page: %s" % num)
+
+        if num == 0:
+            break
+
+        number_of_prs += num
+        page += 1
+
+    return number_of_prs
+
+
 def get_monthly_commits(repos_url, repos_ignore):
-    global start_date, end_date
+    global since, until
 
     params = {"per_page": PER_PAGE_100}
     request_url = repos_url + "?" + urllib.parse.urlencode(params)
 
     # Read repos from a repos_url from organization
     repos = json.loads(gh_session.get(request_url).text)
-    logging.debug(repos)
+    logger.debug(repos)
 
     monthly_commits_of_repos = []
 
     for repo in repos:
         if repo["name"] in repos_ignore:
+            print("Ignore repo: %s" % repo["name"])
             continue
+
+        print("Start to get %s's info" % repo["name"])
 
         # Request the number of monthly commits
         # reference:
@@ -284,22 +657,17 @@ def get_monthly_commits(repos_url, repos_ignore):
 
         today = date.today()
         delta = relativedelta(months=1)
-        first_day_of_the_month = start_date
+        first_day_of_the_month = since
         last_day_of_the_month = first_day_of_the_month + delta
         # - datetime.timedelta(days=1)
 
         number_of_commits = []
 
         commits_url = REPOS_API_URL + repo["full_name"] + "/commits"
-        while (
-            last_day_of_the_month < today and
-            last_day_of_the_month < end_date
-        ):
+        while last_day_of_the_month < today and last_day_of_the_month < until:
             # page iteration is necessary because a page show max 100 commits
-            commits_in_a_month = get_commits_during_a_period(
-                commits_url,
-                first_day_of_the_month,
-                last_day_of_the_month
+            commits_in_a_month = get_commits_during_the_period(
+                commits_url, first_day_of_the_month, last_day_of_the_month
             )
 
             number_of_commits.append(commits_in_a_month)
@@ -308,8 +676,8 @@ def get_monthly_commits(repos_url, repos_ignore):
             last_day_of_the_month = first_day_of_the_month + delta
             # - datetime.timedelta(days=1)
 
-        commits_in_a_month = get_commits_during_a_period(
-            commits_url, first_day_of_the_month, end_date
+        commits_in_a_month = get_commits_during_the_period(
+            commits_url, first_day_of_the_month, until
         )
 
         number_of_commits.append(commits_in_a_month)
@@ -325,16 +693,15 @@ def get_monthly_commits(repos_url, repos_ignore):
     org_repos_monthly_commits_file = open(
         "./results/org-monthly-commits.csv", "w", newline=""
     )
-    org_repos_monthly_commits_writer = csv.writer(
-        org_repos_monthly_commits_file)
+    org_repos_monthly_commits_writer = csv.writer(org_repos_monthly_commits_file)
 
     # Create header
     header = [
         "YYYY-MM",
     ]
-    year_month = start_date
+    year_month = since
 
-    while year_month <= end_date:
+    while year_month <= until:
         header.append(year_month.strftime("%Y-%m"))
         year_month = year_month + relativedelta(months=1)
 
@@ -359,47 +726,52 @@ def get_monthly_commits(repos_url, repos_ignore):
     org_repos_monthly_commits_file.close()
 
 
-if __name__ == "__main__":
-    # Create a directory for results
-    directory = os.path.join("results")
-    os.makedirs(directory, exist_ok=True)
+def get_repos_commits(repos_url, repos_ignore):
+    global since, until
 
-    # Read authentication information from a file
-    with open("auth.json") as auth_file:
-        auth_info = json.load(auth_file)
+    params = {"per_page": PER_PAGE_100}
+    request_url = repos_url + "?" + urllib.parse.urlencode(params)
 
-    username = auth_info["username"]
-    personal_access_token = auth_info["personal-access-token"]
+    # Read repos from a repos_url from organization
+    repos = json.loads(gh_session.get(request_url).text)
+    logger.debug(repos)
 
-    auth_file.close()
+    headers = [
+        "Repo",
+        "Commits",
+    ]
 
-    # Read organization name from a file
-    with open("org.json") as org_file:
-        orgs_json = json.load(org_file)
-    org_name = orgs_json["org-name"]
+    # repos_result_writer.writerow(headers)
 
-    org_file.close()
+    df_repos_info = pd.DataFrame(columns=headers)
 
-    # Read repos-ignore from a file
-    with open("repos-ignore.json") as repos_ignore_file:
-        repos_ignore_json = json.load(repos_ignore_file)
-    repos_ignore = repos_ignore_json["repos-ignore"]
+    for repo in repos:
+        if repo["name"] in repos_ignore:
+            print("Ignore repo: %s" % repo["name"])
+            continue
 
-    repos_ignore_file.close()
+        print("Start to get %s's info" % repo["name"])
 
-    # Get today's date
-    today = date.today()
-    this_year = today.year
+        repo_api_url = REPOS_API_URL + repo["full_name"]
 
-    # Create a session
-    gh_session = requests.Session()
-    gh_session.auth = (username, personal_access_token)
+        # Request repository statistics/information
+        # to get the number of stars, forks, watches
+        repo_info = json.loads(gh_session.get(repo_api_url).text)
 
-    # Get organization information
-    org_info = get_orgs_info(org_name)
+        commits_url = REPOS_API_URL + repo["full_name"] + "/commits"
+        repo_commits = get_commits_during_the_period(commits_url, since, until)
 
-    df_repos_info = get_repos_info(org_info["repos_url"], repos_ignore)
+        df_repos_info.loc[len(df_repos_info)] = [
+            repo_info["name"],
+            repo_commits,
+        ]
 
-    get_monthly_commits(org_info["repos_url"], repos_ignore)
-
-    gh_session.close()
+    print("Save all repos info")
+    outputfile_name = (
+        "./results/("
+        + org_name
+        + ")repos-commits-rawdata-"
+        + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        + ".csv"
+    )
+    df_repos_info.to_csv(outputfile_name, mode="w", header=True, index=False)
