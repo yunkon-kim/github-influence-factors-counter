@@ -9,7 +9,7 @@ GitHub API를 호출하여 유의미한 성과들을 파악하여 GitHub UI 상�
 
 본 도구를 활용하면 조직 정보, 저장소 정보, 및 아래와 같은 성과를 파악할 수 있습니다. :thumbsup:  
 
-![image](https://github.com/yunkon-kim/github-influence-factors-counter/assets/7975459/217b4a6e-a4ce-457a-a9b4-05c6509ad48c)
+![image](https://github.com/yunkon-kim/github-influence-factors-counter/assets/7975459/2ca2231a-7cfa-4d78-a3db-ad7799915442)
 
 Open Source Software (OSS) 관련 프로젝트에서 편리하게 활용되기를 바랍니다. :smile:   
 
@@ -126,4 +126,4 @@ python3 orgs.py
 
 파일을 열어 결과를 확인합니다.
 
-![image](https://github.com/yunkon-kim/github-influence-factors-counter/assets/7975459/217b4a6e-a4ce-457a-a9b4-05c6509ad48c)
+![image](https://github.com/yunkon-kim/github-influence-factors-counter/assets/7975459/2ca2231a-7cfa-4d78-a3db-ad7799915442)

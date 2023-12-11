@@ -3,13 +3,13 @@ import datetime
 import json
 import logging
 import os
+import sys
 import urllib.parse
 from datetime import date
 
 import pandas as pd
 import requests
 from dateutil.relativedelta import relativedelta
-import sys
 
 ##############################################################################
 # Constants
@@ -225,25 +225,6 @@ def get_commits_during_the_period(url_commits, since, until):
     return total_commits_count
 
 
-def get_forks_since(url_forks, since):
-    number_of_forks_in_a_month = 0
-
-    params = {"per_page": PER_PAGE_100}
-
-    request_url = url_forks + "?" + urllib.parse.urlencode(params)
-    forks = json.loads(gh_session.get(request_url).text)
-
-    for fork in forks:
-        create_at = datetime.datetime.strptime(fork["created_at"], "%Y-%m-%dT%H:%M:%SZ")
-        create_at = create_at.date()
-        if create_at >= since:
-            number_of_forks_in_a_month += 1
-        else:
-            break
-
-    return number_of_forks_in_a_month
-
-
 def get_issues_since(url_issues, state, since):
     global PER_PAGE_100
     page = 1
@@ -251,7 +232,7 @@ def get_issues_since(url_issues, state, since):
 
     while True:
         params = {
-            "state": "closed",
+            "state": state,
             "since": since,
             "page": page,
             "per_page": PER_PAGE_100,
@@ -285,7 +266,7 @@ def get_prs_since(url_prs, state, since):
 
     while True:
         params = {
-            "state": "closed",
+            "state": state,
             "since": since,
             "page": page,
             "per_page": PER_PAGE_100,
@@ -338,13 +319,11 @@ def get_target_repos_info(repos_url, target_repos):
         "Repo",
         "Repo link",
         f"Commits since {since} until {until}",
+        "Forks total",
         "Stars total",
         f"Issues (closed) since {since}",
         f"Pull requests (closed) since {since}",
         "Contributors",
-        "Forks total",
-        f"Forks since {since}",
-        "Watches total",
     ]
 
     # Write header
@@ -383,9 +362,9 @@ def get_target_repos_info(repos_url, target_repos):
         commits_url = REPOS_API_URL + repo["full_name"] + "/commits"
         number_of_commits = get_commits_during_the_period(commits_url, since, until)
 
-        logger.info("Get the number of forks since %s" % since)
-        forks_url = repo_info["forks_url"]
-        number_of_forks = get_forks_since(forks_url, since)
+        # logger.info("Get the number of forks since %s" % since)
+        # forks_url = repo_info["forks_url"]
+        # number_of_forks = get_forks_since(forks_url, since)
 
         logger.info("Get the number of issues closed since %s" % since)
         issues_url = REPOS_API_URL + repo["full_name"] + "/issues"
@@ -395,7 +374,7 @@ def get_target_repos_info(repos_url, target_repos):
         # prs_url = REPOS_API_URL + repo["full_name"] + "/pulls"
         number_of_prs_closed = get_prs_since(issues_url, "closed", since)
 
-        repo_name = repo["name"]
+        # repo_name = repo["name"]
         repo_link = "https://github.com/" + repo["full_name"]
 
         logger.debug("Repo name: %s" % repo_info["name"])
@@ -403,28 +382,28 @@ def get_target_repos_info(repos_url, target_repos):
         logger.debug(
             "Commits (since %s until %s): %s" % (since, until, number_of_commits)
         )
+        logger.debug("Forks: %s" % (repo_info["forks_count"]))
         logger.debug("Stars: %s" % (repo_info["stargazers_count"]))
         logger.debug("Issues closed (since %s): %s" % (since, number_of_issues_closed))
         logger.debug(
             "Pull requests closed (since %s): %s" % (since, number_of_prs_closed)
         )
         logger.debug("Contributors: %s" % number_of_contributors)
-        logger.debug("Forks: %s" % (repo_info["forks_count"]))
-        logger.debug("Forks (since %s): %s" % (since, number_of_forks))
-        logger.debug("Watches: %s" % (repo_info["subscribers_count"]))
+        # logger.debug("Forks (since %s): %s" % (since, number_of_forks))
+        # logger.debug("Watches: %s" % (repo_info["subscribers_count"]))
 
         row = [
             repo_info["name"],
             repo_link,
             number_of_commits,
+            repo_info["forks_count"],
             repo_info["stargazers_count"],
             number_of_issues_closed,
             number_of_prs_closed,
             number_of_contributors,
-            repo_info["forks_count"],
-            number_of_forks,
-            repo_info["subscribers_count"],
         ]
+        #     repo_info["subscribers_count"],
+        # ]
 
         df_repos_info.loc[len(df_repos_info)] = row
 
@@ -512,13 +491,11 @@ def get_all_repos_info(repos_url):
         "Repo",
         "Repo link",
         f"Commits since {since} until {until}",
+        "Forks total",
         "Stars total",
         f"Issues (closed) since {since}",
         f"Pull requests (closed) since {since}",
         "Contributors",
-        "Forks total",
-        f"Forks since {since}",
-        "Watches total",
     ]
 
     # Write header
@@ -553,9 +530,9 @@ def get_all_repos_info(repos_url):
         commits_url = REPOS_API_URL + repo["full_name"] + "/commits"
         number_of_commits = get_commits_during_the_period(commits_url, since, until)
 
-        logger.info("Get the number of forks since %s" % since)
-        forks_url = repo_info["forks_url"]
-        number_of_forks = get_forks_since(forks_url, since)
+        # logger.info("Get the number of forks since %s" % since)
+        # forks_url = repo_info["forks_url"]
+        # number_of_forks = get_forks_since(forks_url, since)
 
         logger.info("Get the number of issues closed since %s" % since)
         issues_url = REPOS_API_URL + repo["full_name"] + "/issues"
@@ -565,7 +542,7 @@ def get_all_repos_info(repos_url):
         # prs_url = REPOS_API_URL + repo["full_name"] + "/pulls"
         number_of_prs_closed = get_prs_since(issues_url, "closed", since)
 
-        repo_name = repo["name"]
+        # repo_name = repo["name"]
         repo_link = "https://github.com/" + repo["full_name"]
 
         logger.debug("Repo name: %s" % repo_info["name"])
@@ -573,32 +550,38 @@ def get_all_repos_info(repos_url):
         logger.debug(
             "Commits (since %s until %s): %s" % (since, until, number_of_commits)
         )
+        logger.debug("Forks: %s" % (repo_info["forks_count"]))
         logger.debug("Stars: %s" % (repo_info["stargazers_count"]))
         logger.debug("Issues closed (since %s): %s" % (since, number_of_issues_closed))
         logger.debug(
             "Pull requests closed (since %s): %s" % (since, number_of_prs_closed)
         )
         logger.debug("Contributors: %s" % number_of_contributors)
-        logger.debug("Forks: %s" % (repo_info["forks_count"]))
-        logger.debug("Forks (since %s): %s" % (since, number_of_forks))
-        logger.debug("Watches: %s" % (repo_info["subscribers_count"]))
+        # logger.debug("Forks (since %s): %s" % (since, number_of_forks))
+        # logger.debug("Watches: %s" % (repo_info["subscribers_count"]))
 
         row = [
             repo_info["name"],
             repo_link,
             number_of_commits,
+            repo_info["forks_count"],
             repo_info["stargazers_count"],
             number_of_issues_closed,
             number_of_prs_closed,
             number_of_contributors,
-            repo_info["forks_count"],
-            number_of_forks,
-            repo_info["subscribers_count"],
         ]
+        #     repo_info["subscribers_count"],
+        # ]
 
         df_repos_info.loc[len(df_repos_info)] = row
 
         orgs_result_writer.writerow(row)
+
+    # Sum all rows for each column except column 0 and 1
+    column_sums = df_repos_info.iloc[:, 2:].sum(axis=0)
+    row = pd.Series(["Sum", "-"])._append(column_sums)
+
+    orgs_result_writer.writerow(row)
 
     logger.info("Saved all repos info")
     orgs_result_file.close()
@@ -775,3 +758,22 @@ def get_repos_commits(repos_url, repos_ignore):
         + ".csv"
     )
     df_repos_info.to_csv(outputfile_name, mode="w", header=True, index=False)
+
+
+def get_forks_since(url_forks, since):
+    number_of_forks_in_a_month = 0
+
+    params = {"per_page": PER_PAGE_100}
+
+    request_url = url_forks + "?" + urllib.parse.urlencode(params)
+    forks = json.loads(gh_session.get(request_url).text)
+
+    for fork in forks:
+        create_at = datetime.datetime.strptime(fork["created_at"], "%Y-%m-%dT%H:%M:%SZ")
+        create_at = create_at.date()
+        if create_at >= since:
+            number_of_forks_in_a_month += 1
+        else:
+            break
+
+    return number_of_forks_in_a_month
