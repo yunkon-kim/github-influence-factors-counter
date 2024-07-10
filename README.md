@@ -45,18 +45,18 @@ git clone https://github.com/yunkon-kim/github-influence-factors-counter.git
 
 ```bash
 sudo apt update -y
-sudo apt install python3
-sudo apt install python3-pip
-apt install python3.10-venv -y
+sudo apt install python3 -y
+sudo apt install python3-pip -y
+sudo apt install python3.10-venv -y
 ```
 
 #### `venv` 환경 설정
 
 아래 명령어를 통해 `venv`를 설정 합니다. 
-(`./venv` 디렉토리가 생성되고 `venv` 관련 사항들이 설치될 것 입니다.)
+(`.venv` 디렉토리가 생성되고 `venv` 관련 사항들이 설치될 것 입니다.)
 
 ```bash
-python3 -m venv ./venv
+python3 -m venv .venv
 ```
 
 아래 명령어를 통해 `venv`를 활성화합니다.
