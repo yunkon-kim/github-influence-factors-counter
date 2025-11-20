@@ -3,6 +3,9 @@
 *.xlsx
 *.csv
 *.log
+*.json
+!template=*.json
+results/*.md
 
 auth.json
 org.json
